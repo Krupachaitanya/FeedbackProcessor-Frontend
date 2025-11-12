@@ -82,6 +82,15 @@
       }
     });
 
+    async function getConfig() {
+      try {
+        const res = await fetch('config.json', {cache: 'no-cache'});
+        return await res.json();
+      } catch (e) {
+        return { API_BASE: '' };
+      }
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       status.textContent = '';
@@ -99,7 +108,9 @@
       uploadBtn.querySelector('span')?.nextSibling;
 
       try {
-        const resp = await fetch('/upload', { method: 'POST', body: formData });
+        const cfg = await getConfig();
+        const uploadUrl = (cfg && cfg.API_BASE) ? (cfg.API_BASE.replace(/\/$/, '') + '/upload') : '/upload';
+        const resp = await fetch(uploadUrl, { method: 'POST', body: formData });
         if (!resp.ok) {
           const txt = await resp.text();
           throw new Error(txt || 'Server error');
