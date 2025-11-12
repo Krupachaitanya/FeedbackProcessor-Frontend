@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>FEEDBACK PROCESSSOR</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="card" role="main" aria-labelledby="title">
+    <div class="header">
+      <div class="app-icon" aria-hidden="true">
+        <!-- simple Excel-like icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="3" width="20" height="18" rx="2" fill="rgba(255,255,255,0.06)"></rect>
+          <path d="M6 8h6" stroke="white"></path>
+          <path d="M6 12h6" stroke="white"></path>
+          <path d="M6 16h6" stroke="white"></path>
+        </svg>
+      </div>
+
+      <div>
+        <h1 id="title">FEEDBACK PROCESSSOR</h1>
+        <p class="lead">Upload a CSV (eg. <code>2025-26_CSE _III-I.csv</code>) to get a workbook with section sheets, summaries and comments — styled with an Excel theme.</p>
+      </div>
+    </div>
+
+    <form id="uploadForm">
+      <label class="file-label" for="csvfile" tabindex="0" aria-label="Choose CSV file">
+        <input id="csvfile" name="csvfile" type="file" accept=".csv,text/csv,application/vnd.ms-excel" />
+        <div class="file-meta">
+          <div class="filename" id="fileName">No file chosen</div>
+          <div class="hint">Click to choose a CSV file or drag & drop onto the button.</div>
+        </div>
+      </label>
+
+      <div class="actions">
+        <button id="uploadBtn" type="submit"><span id="pulseWrap" style="display:inline-flex;align-items:center"></span> Upload &amp; Process</button>
+        <a class="link" id="sampleLink" href="#" onclick="return false;">Need sample CSV?</a>
+      </div>
+
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+    </form>
+
+    <footer class="muted">Built with <strong>Node.js</strong> + <strong>ExcelJS</strong>. UI styled to match Excel's green theme.</footer>
+  </main>
+
+  <script>
+    // lightweight UI improvements: show filename, drag & drop support, smooth processing indicator
+    const form = document.getElementById('uploadForm');
+    const status = document.getElementById('status');
+    const fileInput = document.getElementById('csvfile');
+    const fileName = document.getElementById('fileName');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const pulseWrap = document.getElementById('pulseWrap');
+
+    // show chosen filename
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files[0];
+      fileName.textContent = f ? f.name : 'No file chosen';
+      status.textContent = '';
+    });
+
+    // allow clicking label area to open file dialog
+    document.querySelector('.file-label').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { fileInput.click(); e.preventDefault(); }
+    });
+
+    // drag & drop (basic)
+    const label = document.querySelector('.file-label');
+    ['dragenter','dragover'].forEach(ev => {
+      label.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); label.classList.add('drag'); });
+    });
+    ['dragleave','drop'].forEach(ev => {
+      label.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); label.classList.remove('drag'); });
+    });
+    label.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      if (dt && dt.files && dt.files.length) {
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('change'));
+      }
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      status.textContent = '';
+      if (!fileInput.files || fileInput.files.length === 0) {
+        status.textContent = 'Please choose a CSV file first.';
+        return;
+      }
+      const file = fileInput.files[0];
+      const formData = new FormData();
+      formData.append('csvfile', file);
+
+      uploadBtn.disabled = true;
+      // show pulse
+      pulseWrap.innerHTML = '<span class="pulse" aria-hidden="true"></span>';
+      uploadBtn.querySelector('span')?.nextSibling;
+
+      try {
+        const resp = await fetch('/upload', { method: 'POST', body: formData });
+        if (!resp.ok) {
+          const txt = await resp.text();
+          throw new Error(txt || 'Server error');
+        }
+        const cd = resp.headers.get('content-disposition') || '';
+        let filename = 'processed.xlsx';
+        const m = cd.match(/filename="(.+)"/);
+        if (m) filename = m[1];
+
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        status.textContent = 'Download should start automatically.';
+      } catch (err) {
+        console.error(err);
+        status.textContent = 'Error: ' + (err.message || 'Processing failed.');
+      } finally {
+        pulseWrap.innerHTML = '';
+        uploadBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
